@@ -40,7 +40,8 @@ QQ音乐/网页/任何声音 ──→ SoundPipe 捕获 ──→ 虚拟声卡�
 ## 构建与运行
 
 ```powershell
-cd e:\程序设计\麦克风
+git clone https://github.com/LZQlove02/SoundPipe.git
+cd SoundPipe
 .\dotnet.ps1 build SoundPipe.sln            # 构建（0 警告 0 错误）
 .\dotnet.ps1 run --project SoundPipe.Cli    # 不带参数显示帮助
 ```

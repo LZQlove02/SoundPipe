@@ -1,0 +1,42 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!--
+    高对比度主题覆盖层（SystemParameters.HighContrast 为真时由 App.OnStartup 合并）。
+    只替换语义色令牌，控件模板本身不需要改动；全部取自 SystemColors，
+    因此会跟随用户在"设置 → 辅助功能 → 对比度主题"里的选择。
+  -->
+
+  <SolidColorBrush x:Key="WindowBackgroundBrush" Color="{DynamicResource {x:Static SystemColors.WindowColorKey}}" />
+  <SolidColorBrush x:Key="SurfaceBrush" Color="{DynamicResource {x:Static SystemColors.WindowColorKey}}" />
+  <SolidColorBrush x:Key="SurfaceRaisedBrush" Color="{DynamicResource {x:Static SystemColors.WindowColorKey}}" />
+  <SolidColorBrush x:Key="SurfaceMutedBrush" Color="{DynamicResource {x:Static SystemColors.ControlColorKey}}" />
+  <SolidColorBrush x:Key="SurfaceHoverBrush" Color="{DynamicResource {x:Static SystemColors.HighlightColorKey}}" />
+  <SolidColorBrush x:Key="SurfacePressedBrush" Color="{DynamicResource {x:Static SystemColors.HighlightColorKey}}" />
+
+  <SolidColorBrush x:Key="BorderSubtleBrush" Color="{DynamicResource {x:Static SystemColors.WindowTextColorKey}}" />
+  <SolidColorBrush x:Key="BorderStrongBrush" Color="{DynamicResource {x:Static SystemColors.WindowTextColorKey}}" />
+  <SolidColorBrush x:Key="BorderBrush" Color="{DynamicResource {x:Static SystemColors.WindowTextColorKey}}" />
+
+  <SolidColorBrush x:Key="TextPrimaryBrush" Color="{DynamicResource {x:Static SystemColors.WindowTextColorKey}}" />
+  <SolidColorBrush x:Key="TextSecondaryBrush" Color="{DynamicResource {x:Static SystemColors.WindowTextColorKey}}" />
+  <SolidColorBrush x:Key="TextTertiaryBrush" Color="{DynamicResource {x:Static SystemColors.GrayTextColorKey}}" />
+  <SolidColorBrush x:Key="TextOnAccentBrush" Color="{DynamicResource {x:Static SystemColors.HighlightTextColorKey}}" />
+
+  <SolidColorBrush x:Key="AccentBrush" Color="{DynamicResource {x:Static SystemColors.HighlightColorKey}}" />
+  <SolidColorBrush x:Key="AccentHoverBrush" Color="{DynamicResource {x:Static SystemColors.HighlightColorKey}}" />
+  <SolidColorBrush x:Key="AccentPressedBrush" Color="{DynamicResource {x:Static SystemColors.HighlightColorKey}}" />
+  <SolidColorBrush x:Key="AccentSoftBrush" Color="{DynamicResource {x:Static SystemColors.ControlColorKey}}" />
+  <SolidColorBrush x:Key="AccentTextBrush" Color="{DynamicResource {x:Static SystemColors.HighlightTextColorKey}}" />
+
+  <SolidColorBrush x:Key="DestructiveBrush" Color="{DynamicResource {x:Static SystemColors.WindowTextColorKey}}" />
+  <SolidColorBrush x:Key="DestructiveSoftBrush" Color="{DynamicResource {x:Static SystemColors.ControlColorKey}}" />
+  <SolidColorBrush x:Key="WarningBrush" Color="{DynamicResource {x:Static SystemColors.WindowTextColorKey}}" />
+  <SolidColorBrush x:Key="WarningSoftBrush" Color="{DynamicResource {x:Static SystemColors.ControlColorKey}}" />
+  <SolidColorBrush x:Key="RingBrush" Color="{DynamicResource {x:Static SystemColors.WindowTextColorKey}}" />
+
+  <SolidColorBrush x:Key="MeterTrackBrush" Color="{DynamicResource {x:Static SystemColors.ControlColorKey}}" />
+  <SolidColorBrush x:Key="MeterFillBrush" Color="{DynamicResource {x:Static SystemColors.HighlightColorKey}}" />
+  <SolidColorBrush x:Key="MeterFillMicBrush" Color="{DynamicResource {x:Static SystemColors.HighlightColorKey}}" />
+
+</ResourceDictionary>

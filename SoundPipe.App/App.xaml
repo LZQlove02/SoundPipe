@@ -1,0 +1,14 @@
+﻿<Application x:Class="SoundPipe.App.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:SoundPipe.App">
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <!-- 顺序即优先级：令牌 → 控件模板（高对比度覆盖层由 App.OnStartup 追加在最后） -->
+        <ResourceDictionary Source="Themes/Tokens.xaml" />
+        <ResourceDictionary Source="Themes/Controls.xaml" />
+      </ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
+  </Application.Resources>
+</Application>

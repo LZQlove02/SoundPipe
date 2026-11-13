@@ -1,0 +1,16 @@
+bin/
+obj/
+*.user
+.vs/
+.idea/
+TestResults/
+*.log
+
+# 安装包产物（本地构建生成，勿入库）
+installer/publish/
+installer/dist/
+
+# 本地工具产物 / 笔记
+.workbuddy/
+.superpowers/
+.screenshots/

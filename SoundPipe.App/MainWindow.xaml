@@ -1,0 +1,474 @@
+<Window x:Class="SoundPipe.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:tb="http://www.hardcodet.net/taskbar"
+        Title="SoundPipe — 声音转发"
+        Width="1000" Height="724" MinWidth="900" MinHeight="600"
+        MaxWidth="{Binding Source={x:Static SystemParameters.WorkArea}, Path=Width}"
+        MaxHeight="{Binding Source={x:Static SystemParameters.WorkArea}, Path=Height}"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        FontFamily="{StaticResource FontUi}"
+        TextOptions.TextFormattingMode="Ideal"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        Closing="Window_Closing">
+  <Window.Resources>
+    <!-- 下拉项模板：自定义 ComboBox 模板下 DisplayMemberPath 不会作用于"选择框"，
+         必须显式给 ItemTemplate（同时管住下拉项与选择框），并带省略号截断防止撑宽布局 -->
+    <DataTemplate x:Key="ComboItemTemplate">
+      <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+    </DataTemplate>
+  </Window.Resources>
+  <!--
+    布局：状态栏式工作台（Operations Console）
+      顶部  品牌 + 实时运行状态胶囊
+      主体  左栏 = 路由配置（模式/设备/参数/麦克风混音）
+            右栏 = 实时监控（三路电平 + 发声应用）
+      操作栏 主 CTA（开始转发）+ 次操作（停止/一键配置/链路诊断）
+      状态栏 详细反馈文本 + 日志位置
+    设计依据：docs/design-system/MASTER.md
+  -->
+  <Grid>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <!-- ==================== 顶部：品牌 + 运行状态 ==================== -->
+    <Grid Grid.Row="0" Margin="24,20,24,16">
+      <StackPanel Orientation="Horizontal">
+        <Border Width="36" Height="36" CornerRadius="10" VerticalAlignment="Center"
+                Background="{DynamicResource AccentSoftBrush}"
+                BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1">
+          <Viewbox Width="19" Height="19">
+            <Canvas Width="16" Height="16">
+              <Path Data="M 2,6 L 5,6 L 9,2.5 L 9,13.5 L 5,10 L 2,10 Z"
+                    Fill="{DynamicResource AccentTextBrush}" />
+              <Path Data="M 11,6 A 3,3 0 0 1 11,10" Stroke="{DynamicResource AccentTextBrush}"
+                    StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+              <Path Data="M 12.6,4 A 5.4,5.4 0 0 1 12.6,12" Stroke="{DynamicResource AccentTextBrush}"
+                    StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Opacity="0.65" />
+            </Canvas>
+          </Viewbox>
+        </Border>
+
+        <StackPanel Margin="13,0,0,0" VerticalAlignment="Center">
+          <TextBlock Text="SoundPipe" Style="{StaticResource DisplayText}" FontSize="17" />
+          <TextBlock Text="系统声音 / 应用声音 → 虚拟麦克风" Style="{StaticResource CaptionText}" Margin="0,1,0,0" />
+        </StackPanel>
+      </StackPanel>
+
+      <!-- 实时运行状态胶囊：色点 + 文本（不靠颜色单独传达信息） -->
+      <Border HorizontalAlignment="Right" VerticalAlignment="Center" CornerRadius="999" Padding="13,7"
+              Background="{DynamicResource SurfaceMutedBrush}"
+              BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1">
+        <StackPanel Orientation="Horizontal">
+          <Ellipse x:Name="RunDot" Width="8" Height="8" VerticalAlignment="Center"
+                   Fill="{DynamicResource TextTertiaryBrush}" />
+          <TextBlock x:Name="RunStateLabel" Text="待机" Margin="8,0,0,0" VerticalAlignment="Center"
+                     FontSize="{StaticResource FontSizeBody}" FontWeight="SemiBold"
+                     Foreground="{DynamicResource TextSecondaryBrush}" />
+        </StackPanel>
+      </Border>
+    </Grid>
+
+    <!-- ==================== 主体：两栏 ==================== -->
+    <Grid Grid.Row="1" Margin="24,0,24,0">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="1.06*" MinWidth="368" />
+        <ColumnDefinition Width="0.94*" MinWidth="330" />
+      </Grid.ColumnDefinitions>
+
+      <!-- ========== 左栏：路由配置 ========== -->
+      <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Margin="0,0,10,0">
+        <StackPanel>
+
+          <!-- 首次运行引导：未检测到虚拟声卡时显示 -->
+          <Border x:Name="GuidePanel" Visibility="Collapsed" CornerRadius="12" Padding="16" Margin="0,0,0,12"
+                  Background="{DynamicResource WarningSoftBrush}"
+                  BorderBrush="{DynamicResource WarningBrush}" BorderThickness="1">
+            <StackPanel>
+              <StackPanel Orientation="Horizontal">
+                <Path Data="M 8,0.8 L 15.2,14 L 0.8,14 Z" Stroke="{DynamicResource WarningBrush}"
+                      StrokeThickness="1.5" StrokeLineJoin="Round" VerticalAlignment="Center" />
+                <TextBlock Text="未检测到虚拟声卡" Style="{StaticResource SectionTitle}" FontSize="13.5"
+                           Margin="9,0,0,0" VerticalAlignment="Center" />
+              </StackPanel>
+              <TextBlock Style="{StaticResource CaptionText}" Margin="0,8,0,12" TextWrapping="Wrap"
+                         Text="转发需要一个虚拟声卡（免费的 VB-CABLE，或你已装的 Voicemeeter）。安装驱动后重启 SoundPipe 即可自动识别。" />
+              <Button x:Name="DownloadBtn" Content="打开 VB-CABLE 下载页" HorizontalAlignment="Left"
+                      Style="{StaticResource GhostButton}" Click="DownloadBtn_Click" />
+            </StackPanel>
+          </Border>
+
+          <!-- 卡片：转发路由 -->
+          <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+            <StackPanel>
+              <TextBlock Text="转发路由" Style="{StaticResource SectionTitle}" Margin="0,0,0,14" />
+
+              <TextBlock Text="转发模式" Style="{StaticResource FieldLabel}" />
+              <Border CornerRadius="9" Padding="4" Margin="0,0,0,16" HorizontalAlignment="Left"
+                      Background="{DynamicResource SurfaceMutedBrush}"
+                      BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1">
+                <StackPanel Orientation="Horizontal">
+                  <RadioButton x:Name="SystemRadio" Content="整系统声音" IsChecked="True"
+                               Style="{StaticResource SegmentedRadio}" />
+                  <RadioButton x:Name="AppsRadio" Content="指定应用" Margin="4,0,0,0"
+                               Style="{StaticResource SegmentedRadio}" />
+                </StackPanel>
+              </Border>
+
+              <TextBlock Text="转发目标（虚拟声卡输入端）" Style="{StaticResource FieldLabel}" />
+              <ComboBox x:Name="TargetCombo" ItemTemplate="{StaticResource ComboItemTemplate}" Margin="0,0,0,14"
+                        AutomationProperties.Name="转发目标设备" />
+
+              <TextBlock Text="监听输出（可选，边转发边听）" Style="{StaticResource FieldLabel}" />
+              <ComboBox x:Name="MonitorCombo" ItemTemplate="{StaticResource ComboItemTemplate}"
+                        AutomationProperties.Name="监听输出设备" />
+            </StackPanel>
+          </Border>
+
+          <!-- 卡片：转发参数 -->
+          <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+            <StackPanel>
+              <TextBlock Text="转发参数" Style="{StaticResource SectionTitle}" Margin="0,0,0,14" />
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Margin="0,0,14,0">
+                  <TextBlock x:Name="LatencyLabel" Text="缓冲延迟：20 ms" Style="{StaticResource FieldLabel}" />
+                  <Slider x:Name="LatencySlider" Minimum="10" Maximum="100" Value="20"
+                          IsSnapToTickEnabled="True" TickFrequency="5"
+                          AutomationProperties.Name="缓冲延迟"
+                          ValueChanged="LatencySlider_ValueChanged" />
+                  <TextBlock Text="低 = 更跟手，高 = 更抗卡顿" Style="{StaticResource CaptionText}" Margin="0,6,0,0" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="1">
+                  <TextBlock x:Name="GainLabel" Text="音乐增益：1.00 x（0.0 dB）" Style="{StaticResource FieldLabel}" />
+                  <Slider x:Name="GainSlider" Minimum="0" Maximum="3" Value="1"
+                          IsSnapToTickEnabled="True" TickFrequency="0.05"
+                          AutomationProperties.Name="音乐增益"
+                          ValueChanged="GainSlider_ValueChanged" />
+                  <TextBlock x:Name="GainHint" Text="运行中实时生效" Style="{StaticResource CaptionText}"
+                             Margin="0,6,0,0" TextWrapping="Wrap" />
+                </StackPanel>
+              </Grid>
+            </StackPanel>
+          </Border>
+
+          <!-- 卡片：麦克风混音 -->
+          <Border Style="{StaticResource Card}" Margin="0,0,0,4">
+            <StackPanel>
+              <CheckBox x:Name="MicCheck" AutomationProperties.Name="混入麦克风"
+                        Content="混入麦克风（对方同时听到你说话 + 音乐）"
+                        Checked="MicCheck_Changed" Unchecked="MicCheck_Changed" />
+
+              <StackPanel x:Name="MicPanel" Visibility="Collapsed" Margin="27,14,0,0">
+                <TextBlock Text="麦克风设备（已过滤虚拟声卡，避免回环）" Style="{StaticResource FieldLabel}" />
+                <ComboBox x:Name="MicCombo" ItemTemplate="{StaticResource ComboItemTemplate}" Margin="0,0,0,12"
+                          AutomationProperties.Name="麦克风设备" />
+
+                <TextBlock x:Name="MicGainLabel" Text="麦克风增益：1.00 x"
+                           Style="{StaticResource FieldLabel}" />
+                <Slider x:Name="MicSlider" Minimum="0" Maximum="3" Value="1"
+                        IsSnapToTickEnabled="True" TickFrequency="0.05"
+                        AutomationProperties.Name="麦克风增益"
+                        ValueChanged="MicSlider_ValueChanged" />
+
+                <Border CornerRadius="8" Padding="10,8" Margin="0,12,0,0"
+                        Background="{DynamicResource SurfaceMutedBrush}">
+                  <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap"
+                             Text="提示：建议戴耳机。外放声音会被麦克风录回去，对方会听到回声。" />
+                </Border>
+              </StackPanel>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </ScrollViewer>
+
+      <!-- ========== 右栏：实时监控 ========== -->
+      <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
+        <StackPanel>
+
+          <!-- 卡片：实时电平 -->
+          <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+            <StackPanel>
+              <Grid Margin="0,0,0,14">
+                <TextBlock Text="实时电平" Style="{StaticResource SectionTitle}" VerticalAlignment="Center" />
+                <TextBlock x:Name="LevelHint" Text="停止时不刷新" HorizontalAlignment="Right"
+                           VerticalAlignment="Center" Style="{StaticResource CaptionText}" />
+              </Grid>
+
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="72" />
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" MinWidth="66" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="34" />
+                  <RowDefinition Height="34" />
+                  <RowDefinition Height="34" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="源声音" Style="{StaticResource BodyText}"
+                           VerticalAlignment="Center" />
+                <ProgressBar x:Name="SourceLevel" Grid.Row="0" Grid.Column="1" Maximum="1"
+                             Style="{StaticResource MeterBar}" VerticalAlignment="Center"
+                             AutomationProperties.Name="源声音电平" />
+                <TextBlock x:Name="SourceLevelText" Grid.Row="0" Grid.Column="2" Text="—"
+                           Style="{StaticResource MonoText}" HorizontalAlignment="Right"
+                           VerticalAlignment="Center" />
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="总输出" Style="{StaticResource BodyText}"
+                           VerticalAlignment="Center" />
+                <ProgressBar x:Name="OutputLevel" Grid.Row="1" Grid.Column="1" Maximum="1"
+                             Style="{StaticResource MeterBar}" VerticalAlignment="Center"
+                             AutomationProperties.Name="总输出电平" />
+                <TextBlock x:Name="OutputLevelText" Grid.Row="1" Grid.Column="2" Text="—"
+                           Style="{StaticResource MonoText}" HorizontalAlignment="Right"
+                           VerticalAlignment="Center" />
+
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="麦克风" Style="{StaticResource BodyText}"
+                           VerticalAlignment="Center" />
+                <ProgressBar x:Name="MicLevel" Grid.Row="2" Grid.Column="1" Maximum="1"
+                             Style="{StaticResource MeterBar}" VerticalAlignment="Center"
+                             Foreground="{DynamicResource MeterFillMicBrush}"
+                             AutomationProperties.Name="麦克风电平" />
+                <TextBlock x:Name="MicLevelText" Grid.Row="2" Grid.Column="2" Text="—"
+                           Style="{StaticResource MonoText}" HorizontalAlignment="Right"
+                           VerticalAlignment="Center" />
+              </Grid>
+            </StackPanel>
+          </Border>
+
+          <!-- 卡片：发声应用 -->
+          <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+            <StackPanel>
+              <TextBlock Text="发声应用" Style="{StaticResource SectionTitle}" />
+              <TextBlock Text="勾选 = 转发该应用（仅“指定应用”模式生效）"
+                         Style="{StaticResource CaptionText}" Margin="0,4,0,10" />
+
+              <Border CornerRadius="9" Padding="8" MinHeight="96"
+                      Background="{DynamicResource SurfaceMutedBrush}"
+                      BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1">
+                <Grid>
+                  <ScrollViewer MaxHeight="196" VerticalScrollBarVisibility="Auto">
+                    <ItemsControl x:Name="AppsList">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                          <Border CornerRadius="7" Padding="8,6" Margin="0,1">
+                            <Border.Style>
+                              <Style TargetType="Border">
+                                <Setter Property="Background" Value="Transparent" />
+                                <Style.Triggers>
+                                  <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />
+                                  </Trigger>
+                                </Style.Triggers>
+                              </Style>
+                            </Border.Style>
+                            <StackPanel>
+                              <Grid>
+                                <Grid.ColumnDefinitions>
+                                  <ColumnDefinition Width="Auto" />
+                                  <ColumnDefinition Width="*" />
+                                  <ColumnDefinition Width="Auto" />
+                                  <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <CheckBox Grid.Column="0" IsChecked="{Binding Checked, Mode=TwoWay}"
+                                          Tag="{Binding Pid}" VerticalAlignment="Center"
+                                          AutomationProperties.Name="选择该应用"
+                                          Checked="AppCheck_Changed" Unchecked="AppCheck_Changed" />
+
+                                <TextBlock Grid.Column="1" Text="{Binding Name}" Margin="10,0,0,0"
+                                           Style="{StaticResource BodyText}" VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" />
+
+                                <TextBlock Grid.Column="2" Text="{Binding PidText}" Margin="8,0,10,0"
+                                           Style="{StaticResource MonoText}" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource TextTertiaryBrush}" />
+
+                                <!-- 状态：矢量色点 + 文字（颜色不单独承载语义） -->
+                                <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                                  <Ellipse Width="7" Height="7" VerticalAlignment="Center">
+                                    <Ellipse.Style>
+                                      <Style TargetType="Ellipse">
+                                        <Setter Property="Fill" Value="{DynamicResource TextTertiaryBrush}" />
+                                        <Style.Triggers>
+                                          <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                            <Setter Property="Fill" Value="{DynamicResource AccentBrush}" />
+                                          </DataTrigger>
+                                        </Style.Triggers>
+                                      </Style>
+                                    </Ellipse.Style>
+                                  </Ellipse>
+                                  <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" MinWidth="40">
+                                    <TextBlock.Style>
+                                      <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                                        <Setter Property="Text" Value="静默" />
+                                        <Style.Triggers>
+                                          <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                            <Setter Property="Text" Value="发声中" />
+                                            <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
+                                          </DataTrigger>
+                                        </Style.Triggers>
+                                      </Style>
+                                    </TextBlock.Style>
+                                  </TextBlock>
+                                </StackPanel>
+                              </Grid>
+
+                              <!-- F6：每应用独立音量（勾选后展开，旁显百分比） -->
+                              <Grid Margin="28,2,0,0">
+                                <Grid.Style>
+                                  <Style TargetType="Grid">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                      <DataTrigger Binding="{Binding Checked}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                      </DataTrigger>
+                                    </Style.Triggers>
+                                  </Style>
+                                </Grid.Style>
+                                <Grid.ColumnDefinitions>
+                                  <ColumnDefinition Width="Auto" />
+                                  <ColumnDefinition Width="*" />
+                                  <ColumnDefinition Width="Auto" MinWidth="40" />
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Text="音量" Style="{StaticResource CaptionText}"
+                                           VerticalAlignment="Center" />
+                                <Slider Grid.Column="1" Margin="8,0" Minimum="0" Maximum="2"
+                                        IsSnapToTickEnabled="True" TickFrequency="0.05"
+                                        Value="{Binding Gain, Mode=TwoWay}"
+                                        Tag="{Binding Pid}" ValueChanged="AppGain_Changed"
+                                        AutomationProperties.Name="应用音量" />
+                                <TextBlock Grid.Column="2" Text="{Binding Gain, StringFormat={}{0:P0}}"
+                                           Style="{StaticResource MonoText}" HorizontalAlignment="Right"
+                                           VerticalAlignment="Center" />
+                              </Grid>
+                            </StackPanel>
+                          </Border>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </ScrollViewer>
+
+                  <TextBlock x:Name="NoAppsHint" Visibility="Collapsed" TextWrapping="Wrap"
+                             Style="{StaticResource CaptionText}" Margin="6,10,6,0"
+                             Text="暂无发声应用。播放声音后，正在发声的应用会自动出现在这里。" />
+                </Grid>
+              </Border>
+
+              <CheckBox x:Name="AutoRunCheck" Margin="0,14,0,0"
+                        AutomationProperties.Name="开机自动运行"
+                        Content="开机自动运行 SoundPipe（后台托盘）"
+                        Checked="AutoRun_Changed" Unchecked="AutoRun_Changed" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </ScrollViewer>
+    </Grid>
+
+    <!-- ==================== 操作栏 ==================== -->
+    <Border Grid.Row="2" Margin="24,16,24,0" Padding="14,12" CornerRadius="12"
+            Background="{DynamicResource SurfaceBrush}"
+            BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1">
+      <Grid>
+        <StackPanel Orientation="Horizontal">
+          <Button x:Name="StartBtn" AutomationProperties.Name="开始转发"
+                  Style="{StaticResource PrimaryButton}" MinWidth="128" Click="StartBtn_Click">
+            <StackPanel Orientation="Horizontal">
+              <Path Data="M 0,0 L 9,5.5 L 0,11 Z" Fill="{DynamicResource TextOnAccentBrush}"
+                    VerticalAlignment="Center" />
+              <TextBlock Text="开始转发" Margin="9,0,0,0" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+
+          <Button x:Name="StopBtn" AutomationProperties.Name="停止转发" IsEnabled="False"
+                  Style="{StaticResource SecondaryButton}" MinWidth="104" Margin="10,0,0,0"
+                  Click="StopBtn_Click">
+            <StackPanel Orientation="Horizontal">
+              <Rectangle Width="10" Height="10" RadiusX="2" RadiusY="2" VerticalAlignment="Center"
+                         Stroke="{DynamicResource TextPrimaryBrush}" StrokeThickness="1.6" />
+              <TextBlock Text="停止" Margin="9,0,0,0" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+        </StackPanel>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+          <Button x:Name="SetupBtn" AutomationProperties.Name="一键配置"
+                  Style="{StaticResource SecondaryButton}" MinWidth="106" Click="SetupBtn_Click">
+            <StackPanel Orientation="Horizontal">
+              <Viewbox Width="15" Height="15" VerticalAlignment="Center">
+                <Canvas Width="16" Height="16">
+                  <Path Data="M 1,4 H 15 M 1,8 H 15 M 1,12 H 15" Stroke="{DynamicResource TextPrimaryBrush}"
+                        StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                  <Ellipse Canvas.Left="3.6" Canvas.Top="2" Width="4" Height="4"
+                           Fill="{DynamicResource SurfaceRaisedBrush}" Stroke="{DynamicResource TextPrimaryBrush}"
+                           StrokeThickness="1.4" />
+                  <Ellipse Canvas.Left="10" Canvas.Top="6" Width="4" Height="4"
+                           Fill="{DynamicResource SurfaceRaisedBrush}" Stroke="{DynamicResource TextPrimaryBrush}"
+                           StrokeThickness="1.4" />
+                  <Ellipse Canvas.Left="5.6" Canvas.Top="10" Width="4" Height="4"
+                           Fill="{DynamicResource SurfaceRaisedBrush}" Stroke="{DynamicResource TextPrimaryBrush}"
+                           StrokeThickness="1.4" />
+                </Canvas>
+              </Viewbox>
+              <TextBlock Text="一键配置" Margin="9,0,0,0" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+
+          <Button x:Name="DiagBtn" AutomationProperties.Name="链路诊断"
+                  Style="{StaticResource SecondaryButton}" MinWidth="106" Margin="10,0,0,0"
+                  Click="DiagBtn_Click">
+            <StackPanel Orientation="Horizontal">
+              <Viewbox Width="16" Height="15" VerticalAlignment="Center">
+                <Canvas Width="16" Height="16">
+                  <Path Data="M 0.5,8 H 3.5 L 5.5,3 L 8.5,13 L 10.5,8 H 15.5"
+                        Stroke="{DynamicResource TextPrimaryBrush}" StrokeThickness="1.6"
+                        StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" />
+                </Canvas>
+              </Viewbox>
+              <TextBlock Text="链路诊断" Margin="9,0,0,0" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- ==================== 状态栏 ==================== -->
+    <Grid Grid.Row="3" Margin="24,10,24,16">
+      <TextBlock x:Name="StatusText" Text="就绪" Style="{StaticResource CaptionText}"
+                 TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                 AutomationProperties.LiveSetting="Polite" />
+      <TextBlock Text="日志：%APPDATA%\SoundPipe\logs" HorizontalAlignment="Right"
+                 VerticalAlignment="Center" Style="{StaticResource CaptionText}"
+                 Foreground="{DynamicResource TextTertiaryBrush}" />
+    </Grid>
+
+    <!-- ==================== 托盘图标 ==================== -->
+    <tb:TaskbarIcon x:Name="TrayIcon"
+                    ToolTipText="SoundPipe — 声音转发"
+                    IconSource="pack://application:,,,/Assets/app.ico"
+                    TrayLeftMouseDown="TrayIcon_TrayLeftMouseDown"
+                    Visibility="Visible">
+      <tb:TaskbarIcon.ContextMenu>
+        <ContextMenu>
+          <MenuItem Header="打开主窗口" Click="TrayOpen_Click" FontWeight="Bold" />
+          <Separator />
+          <MenuItem Header="退出" Click="TrayExit_Click" />
+        </ContextMenu>
+      </tb:TaskbarIcon.ContextMenu>
+    </tb:TaskbarIcon>
+  </Grid>
+</Window>
